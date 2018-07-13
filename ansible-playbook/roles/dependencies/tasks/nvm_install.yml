@@ -1,0 +1,41 @@
+---
+
+- name: touch ~/.profile
+  file:
+    path: "{{ ansible_env.HOME }}/.profile"
+    state: touch
+
+- name: mkdir "{{ ansible_env.HOME }}/.nvm"
+  file:
+    path: "{{ ansible_env.HOME }}/.nvm"
+    state: directory
+
+- name: create temporary directory NVM_TMP
+  tempfile:
+    state: directory
+    suffix: NVM_TMP
+  register: tmp
+
+- name: download nvm install script
+  get_url:
+    url: "https://raw.githubusercontent.com/creationix/nvm/v{{ nvm_version }}/install.sh"
+    dest: "{{ tmp.path }}/install.sh"
+
+- name: Execute nvm install.sh
+  shell: "{{ tmp.path }}/install.sh"
+
+- name: nvm_dir_adds
+  lineinfile:
+    path: "{{ item }}"
+    line: 'export NVM_DIR=~/.nvm'
+  with_items:
+    - "{{ ansible_env.HOME }}/.zshrc"
+    - "{{ ansible_env.HOME }}/.bash_profile"
+
+- name: nvm_dir_adds
+  lineinfile:
+    path: "{{ item }}"
+    line: 'source ~/.nvm/nvm.sh'
+  with_items:
+    - "{{ ansible_env.HOME }}/.zshrc"
+    - "{{ ansible_env.HOME }}/.bash_profile"

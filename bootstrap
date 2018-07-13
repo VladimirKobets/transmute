@@ -6,11 +6,10 @@
 : ${TRANSMUTE_REPO:=$TRANSMUTE_DIR/git/transmute}
 : ${TRANSMUTE_VERBOSITY:=10}
 : ${HELM_INSTALL_DIR:=$TRANSMUTE_BIN}
-: ${TRANSMUTE_KUBE_VERSION:=v1.9.4}
-: ${FIX_DOTFILES:="true"}
 : ${NVM_DIR_ADDS:="true"}
 : ${NVM_VERSION:='0.33.9'}
 : ${TRANSMUTE_USE_WARN:=y}
+: ${TRAVIS:='true'}
 
 export CWD=$(pwd)
 export PATH=$TRANSMUTE_BIN:$PATH
@@ -127,94 +126,7 @@ macreadlink () {
   fi
 }
 
-windowsminikube () {
-	echo 'Installing minikube'
-	choco install minikube
-}
 
-windowskubectl () {
-	echo 'Installing kubectl'
-	choco install kubernetes-cli
-}
-
-windowshelm () {
-	echo 'Installing helm'
-	choco install helm
-}
-
-windowsnsenter () {
-	echo 'Installing nsenter'
-	choco install nsenter
-}
-
-install_nsenter_linux (){
-   
-  sudo apt-get -y install libncurses5-dev libslang2-dev gettext zlib1g-dev libselinux1-dev debhelper lsb-release pkg-config po-debconf autoconf automake autopoint libtool bison
-  TMP=$(mktemp -d --suffix=NSENTER_TMP)
-  curl -sL https://www.kernel.org/pub/linux/utils/util-linux/v2.30/util-linux-2.30.2.tar.gz | tar -xz -C $TMP/
-  cd $TMP/util-linux-2.30.2 && ./autogen.sh && ./configure && make nsenter
-  mkdir -p $HOME/.local/bin
-  cp -v $TMP/util-linux-2.30.2/nsenter $HOME/.local/bin/nsenter
-  chmod +x $HOME/.local/bin/nsenter
-  sudo cp -v $HOME/.local/bin/nsenter /usr/bin/nsenter
-}
-
-install_kubectl_linux () {
-  if ! type "kubectl" >/dev/null 2>/dev/null; then
-    echo 'Installing kubectl'
-    TMP=$(mktemp -d --suffix=KUBECTLTMP)
-    cd $TMP
-    curl -LO https://storage.googleapis.com/kubernetes-release/release/$TRANSMUTE_KUBE_VERSION/bin/linux/amd64/kubectl
-    chmod +x kubectl
-    sudo chown 0:0 kubectl
-    sudo mv -v kubectl /usr/local/bin/
-    cd
-    rmdir $TMP
-  fi
-}
-
-install_minikube_linux () {
-  if ! type "minikube" >/dev/null 2>/dev/null; then
-    echo 'Installing minikube'
-
-    curl -Lo minikube https://storage.googleapis.com/minikube/releases/v0.25.2/minikube-linux-amd64
-    chmod +x minikube
-    sudo chown 0:0 minikube
-    sudo mv minikube /usr/local/bin/
-
-  fi
-}
-
-install_helm_linux () {
-  if ! type "helm" >/dev/null 2>/dev/null; then
-
-    HELM_VERSION='v2.8.2'
-    HELM_PREFIX="$HOME/.transmute/bin"
-    HELM_URL="https://storage.googleapis.com/kubernetes-helm/helm-$HELM_VERSION-linux-amd64.tar.gz"
-
-    echo "Installing $HELM_VERSION"
-    curl -sL $HELM_URL -o helm.tgz
-    tar zxvf helm.tgz
-
-    cd linux-amd64
-    chmod +x helm
-    mv helm $HELM_PREFIX/helm
-  fi
-}
-
-nvm_dir_adds () {
-  LINE_TO_ADD='export NVM_DIR=~/.nvm'
-  TARGET_FILE_FOR_ADD=~/.zshrc
-  check_if_line_exists || add_line_to
-  TARGET_FILE_FOR_ADD=~/.bash_profile
-  check_if_line_exists || add_line_to
-
-  LINE_TO_ADD='source ~/.nvm/nvm.sh'
-  TARGET_FILE_FOR_ADD=~/.zshrc
-  check_if_line_exists || add_line_to
-  TARGET_FILE_FOR_ADD=~/.bash_profile
-  check_if_line_exists || add_line_to
-}
 
 dotfiles_install () {
   if [[ $TRANSMUTE_VERBOSITY -gt '1' ]]; then
@@ -229,7 +141,7 @@ dotfiles_install () {
   check_if_line_exists || add_line_to
   TARGET_FILE_FOR_ADD=$HOME/.zshrc
   check_if_line_exists || add_line_to
-  export PATH=$HOME/.transmute/bin:$PATH
+  environment: PATH=$HOME/.transmute/bin:$PATH
 }
 
 install_certbot () {
@@ -392,6 +304,33 @@ install_curl () {
   fi
 }
 
+install_ansible () {
+  if ! type "ansible" >/dev/null 2>/dev/null; then
+    if type "apt-get" >/dev/null 2>/dev/null; then
+      sudo apt-get install -y software-properties-common
+      sudo apt-add-repository ppa:ansible/ansible && \
+      sudo apt-key fingerprint 0EBFCD88 && \
+      sudo apt-get update && \
+      sudo apt-get install -y ansible
+    elif type "dnf" >/dev/null 2>/dev/null; then
+      sudo dnf install -y ansible
+    elif type "zypper" >/dev/null 2>/dev/null; then
+      sudo zypper --non-interactive install -y ansible
+    elif type "pacman" >/dev/null 2>/dev/null; then
+      sudo pacman -Sy --noconfirm ansible
+    elif type "brew" >/dev/null 2>/dev/null; then
+      brew install ansible < /dev/null
+    elif type "chocolatey" >/dev/null 2>/dev/null; then
+      chocolatey install ansible
+    else
+      echo 'No appropriate installer found for ansible, install ansible and run this script again'
+      exit 1
+    fi
+  else
+    echo 'ansible already installed skipping'
+  fi
+}
+
 install_git () {
   if ! type "git" >/dev/null 2>/dev/null; then
     if type "apt-get" >/dev/null 2>/dev/null; then
@@ -456,75 +395,6 @@ transmute_env_install () {
   fi
 }
 
-windowsreqs () {
-  check_cmd chocolatey
-  install_curl
-  install_git
-  install_socat
-  windowskubectl
-  windowsminikube
-  windowshelm
-  windowsnsenter
-  install_nvm
-  lts_install
-  install_ngrok_npm
-  install_truffle_npm
-  install_lerna_npm
-  install_certbot
-  install_jq
-  dotfiles_install
-  transmute_env_install
-  transmute_cli_install
-}
-
-macreqs () {
-  check_cmd brew
-  install_curl
-  install_git
-  install_socat
-  set +e
-  brew install gnupg < /dev/null
-  set -e
-  install_mac_virtualbox
-  mackubectl
-  macminikube
-  machelm
-  macnsenter
-  macreadlink
-  install_nvm
-  lts_install
-  install_ngrok_npm
-  install_truffle_npm
-  install_lerna_npm
-  install_certbot
-  install_jq
-  dotfiles_install
-  transmute_env_install
-  transmute_cli_install
-}
-
-linuxreqs () {
-  sudo apt-get update -y
-  install_nsenter_linux
-  install_curl
-  install_git
-  install_socat
-  install_kubectl_linux
-  install_minikube_linux
-  install_helm_linux
-  install_nvm
-  lts_install
-  install_ngrok_npm
-  install_truffle_npm
-  install_lerna_npm
-  install_certbot
-  install_jq
-  dotfiles_install
-  transmute_env_install
-  transmute_cli_install
-}
-
-
 run_it () {
 set -e
 
@@ -569,13 +439,15 @@ elif [ "$UNAME" = "CYGWIN_NT-10.0" ] ; then
   PLATFORM="os.cygwin.x86_64"
 fi
 
-echo "Warning!"
-sleep 1
-echo "This script will install minikube, kubectl and helm,
-and then install transmute."
-if [[ "$TRANSMUTE_USE_WARN" == 'y' ]]; then
-  warn_user_of_global_install
-fi
+#echo "Warning!"
+#sleep 1
+#echo "This script will install minikube, kubectl and helm,
+#and then install transmute."
+#if [[ "$TRANSMUTE_USE_WARN" == 'y' ]]; then
+#  warn_user_of_global_install
+#fi
+
+install_ansible
 
 echo "Checking $TRANSMUTE_DIR"
 mkdir -p $TRANSMUTE_BIN
@@ -595,8 +467,8 @@ install_git
 if [ "$TRAVIS" = 'true' ]; then
   echo 'travis ci skipping git actions'
    
-  cd $TRANSMUTE_DIR/git
-  ln -s $TRAVIS_BUILD_DIR transmute
+#  cd $TRANSMUTE_DIR/git
+#  ln -s $TRAVIS_BUILD_DIR transmute
 
 elif [ -e "$TRANSMUTE_REPO" ]; then
   echo 'Updating the transmute repo'
@@ -617,17 +489,9 @@ else
   cd $CWD
 fi
 
-if [ "$FIX_DOTFILES" = "true" ]; then
-  dotfiles_install
-fi
-
-if [ "$PLATFORM" = "os.linux.x86_64" ] ; then
-  linuxreqs
-elif [ "$PLATFORM" = "os.osx.x86_64" ] ; then
-  macreqs
-elif [ "$PLATFORM" = "os.windows.x86_64" ] ; then
-  windowsreqs
-fi
+ansible-playbook --diff -i "localhost" $TRANSMUTE_REPO/ansible-playbook/transmute.yml
+echo "after this need run ansible"
+exit 1;
 
 echo 'check helm'
 check_cmd helm

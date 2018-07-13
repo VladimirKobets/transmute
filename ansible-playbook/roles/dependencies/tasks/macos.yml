@@ -1,0 +1,73 @@
+---
+#
+#  check_cmd brew
+#  install_curl
+#  install_git
+#  install_socat
+#  set +e
+#  brew install gnupg < /dev/null
+#  set -e
+#  install_mac_virtualbox
+#  mackubectl
+#  macminikube
+#  machelm
+#  macnsenter
+#  macreadlink
+
+- name: stat {{ ansible_env.HOME }}/.nvm/nvm.sh
+  stat:
+    path: "{{ ansible_env.HOME }}/.nvm/nvm.sh"
+  register: nvm_sh
+
+- name: This loads nvm
+  shell: ". {{ ansible_env.HOME }}/.nvm/nvm.sh"
+  when: nvm_sh.stat.isreg is defined and nvm_sh.stat.isreg
+
+- name: stat {{ ansible_env.HOME }}/.nvm/bash_completion
+  stat:
+    path: "{{ ansible_env.HOME }}/.nvm/bash_completion"
+  register: bash_completion
+
+- name: This loads bash_completion
+  shell: ". {{ ansible_env.HOME }}/.nvm/bash_completion"
+  when: bash_completion.stat.isreg is defined and bash_completion.stat.isreg
+
+- name: check nvm version
+  shell: "nvm  --version 2>/dev/null"
+  register: nvm_installed_version
+  ignore_error: yes
+
+- include: nvm_install.yml
+  when: nvm_installed_version is not defined or (nvm_installed_version.stdout != nvm_version)
+
+#lts_install () {
+#  if ! type "npm" >/dev/null 2>/dev/null; then
+#    if [[ $TRANSMUTE_VERBOSITY -gt '2' ]]; then
+#      echo 'Installing Node 8 LTS/carbon'
+#    fi
+#
+#    export NVM_DIR="$HOME/.nvm"
+#    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+#    [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+#
+#    set +e
+#    nvm ls-remote --lts=carbon
+#    if [[ $TRANSMUTE_VERBOSITY -gt '2' ]]; then
+#      echo "Engage nvm to install lts/carbon"
+#    fi
+#    nvm install --lts=carbon
+#    if [[ $TRANSMUTE_VERBOSITY -gt '2' ]]; then
+#      echo "Engage nvm to alias lts/carbon to default"
+#    fi
+#    nvm alias default lts/carbon
+#    nvm use default
+#    set -e
+
+#  lts_install
+#  install_ngrok_npm
+#  install_truffle_npm
+#  install_lerna_npm
+#  install_certbot
+#  install_jq
+#  transmute_env_install
+#  transmute_cli_install

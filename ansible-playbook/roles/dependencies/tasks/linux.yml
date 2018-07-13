@@ -1,0 +1,166 @@
+---
+- name: install packages
+  package:
+    name: "{{ item }}"
+    state: present
+  become: yes
+  with_items:
+    - libncurses5-dev
+    - libslang2-dev
+    - gettext
+    - zlib1g-dev
+    - libselinux1-dev
+    - debhelper
+    - lsb-release
+    - pkg-config
+    - po-debconf
+    - autoconf
+    - automake
+    - autopoint
+    - libtool
+    - bison
+    - curl
+    - git
+    - socat
+
+- name: create temporary directory NSENTER_TMP
+  tempfile:
+    state: directory
+    suffix: NSENTER_TMP
+  register: tmp
+
+- name: Unarchive util-linux
+  unarchive:
+    src: "https://www.kernel.org/pub/linux/utils/util-linux/v2.30/util-linux-2.30.2.tar.gz"
+    dest: "{{ tmp.path }}"
+    remote_src: yes
+
+- name: build nsenter
+  shell: "./autogen.sh && ./configure && make nsenter"
+  args:
+    chdir: "{{ tmp.path }}/util-linux-2.30.2"
+
+- name: Create dir {{ transmute_bin }}
+  file:
+    path: "{{ ansible_env.HOME }}/.local/bin"
+    state: directory
+    recurse: yes
+
+- name: Copy nsenter
+  copy:
+    src: "{{ tmp.path }}/util-linux-2.30.2/nsenter"
+    dest: "{{ ansible_env.HOME }}/.local/bin/nsenter"
+    remote_src: yes
+    mode: 0750
+
+- name: Copy nsenter
+  copy:
+    src: "{{ tmp.path }}/util-linux-2.30.2/nsenter"
+    dest: "/usr/bin/nsenter"
+    remote_src: yes
+    mode: 0755
+  become: yes
+
+- name: install kubectl
+  get_url:
+    url: "https://storage.googleapis.com/kubernetes-release/release/{{ transmute_kube_version }}/bin/linux/amd64/kubectl"
+    dest: "/usr/local/bin/kubectl"
+    remote_src: yes
+    mode: 0755
+    owner: 0
+    group: 0
+  become: yes
+
+- name: install minikube
+  get_url:
+    url: "https://storage.googleapis.com/minikube/releases/v0.25.2/minikube-linux-amd64"
+    dest: "/usr/local/bin/minikube"
+    remote_src: yes
+    mode: 0755
+    owner: 0
+    group: 0
+  become: yes
+
+- name: create temporary directory HELM_TMP
+  tempfile:
+    state: directory
+    suffix: HELM_TMP
+  register: tmp
+
+- name: Unarchive helm
+  unarchive:
+    src: "https://storage.googleapis.com/kubernetes-helm/helm-v2.8.2-linux-amd64.tar.gz"
+    dest: "{{ tmp.path }}"
+    remote_src: yes
+
+- name: Copy helm
+  copy:
+    src: "{{ tmp.path }}/linux-amd64/helm"
+    dest: "{{ ansible_env.HOME }}/.transmute/bin/helm"
+    remote_src: yes
+    mode: 0750
+
+- name: stat {{ ansible_env.HOME }}/.nvm/nvm.sh
+  stat:
+    path: "{{ ansible_env.HOME }}/.nvm/nvm.sh"
+  register: nvm_sh
+
+- name: This loads nvm
+  shell: ". {{ ansible_env.HOME }}/.nvm/nvm.sh"
+  when: nvm_sh.stat.isreg is defined and nvm_sh.stat.isreg
+
+- name: stat {{ ansible_env.HOME }}/.nvm/bash_completion
+  stat:
+    path: "{{ ansible_env.HOME }}/.nvm/bash_completion"
+  register: bash_completion
+
+- name: This loads bash_completion
+  shell: ". {{ ansible_env.HOME }}/.nvm/bash_completion"
+  when: bash_completion.stat.isreg is defined and bash_completion.stat.isreg
+
+- name: check nvm version
+  shell: "\. {{ ansible_env.HOME }}/.nvm/bash_completion && \. {{ ansible_env.HOME }}/.nvm/nvm.sh && nvm  --version 2>/dev/null"
+  when: bash_completion.stat.isreg is defined and bash_completion.stat.isreg and nvm_sh.stat.isreg is defined and nvm_sh.stat.isreg
+  register: nvm_installed_version
+  ignore_error: yes
+
+- name: check nvm version
+  shell: "\. {{ ansible_env.HOME }}/.nvm/nvm.sh && nvm  --version 2>/dev/null"
+  when: bash_completion.stat.isreg is not defined and not bash_completion.stat.isreg and nvm_sh.stat.isreg is defined and nvm_sh.stat.isreg
+  register: nvm_installed_version
+  ignore_error: yes
+
+- name: check nvm version
+  shell: "\. {{ ansible_env.HOME }}/.nvm/bash_completion && nvm  --version 2>/dev/null"
+  when: bash_completion.stat.isreg is defined and bash_completion.stat.isreg and nvm_sh.stat.isreg is not defined and not nvm_sh.stat.isreg
+  register: nvm_installed_version
+  ignore_error: yes
+
+- name: check nvm version
+  shell: "nvm  --version 2>/dev/null"
+  when: bash_completion.stat.isreg is not defined and not bash_completion.stat.isreg and nvm_sh.stat.isreg is not defined and not nvm_sh.stat.isreg
+  register: nvm_installed_version
+  ignore_error: yes
+
+- include: nvm_install.yml
+  when: nvm_installed_version is not defined or (nvm_installed_version.stdout != nvm_version)
+
+- name: nvm ls-remote --lts=carbon
+  shell: "nvm ls-remote --lts=carbon"
+
+- name: nvm install --lts=carbon
+  shell: "nvm install --lts=carbon"
+
+- name: nvm alias default lts/carbon
+  shell: "nvm alias default lts/carbon"
+
+- name: nvm use default
+  shell: "nvm use default"
+
+#  install_ngrok_npm
+#  install_truffle_npm
+#  install_lerna_npm
+#  install_certbot
+#  install_jq
+#  transmute_env_install
+#  transmute_cli_install
